@@ -1,0 +1,54 @@
+{
+  "manifest_version": 3,
+  "name": "ext",
+  "short_name": "ext",
+  "description": "Whatever.",
+  "version": "0.1",
+  "author": "tyrzen",
+  "offline_enabled": false,
+  "action": {
+    "default_title": "ext",
+    "default_popup": "popup.html"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';"
+  },
+  "background": {
+    "type": "module",
+    "service_worker": "background.js"
+  },
+  "permissions": [
+    "webRequest",
+    "webNavigation",
+    "activeTab",
+    "tabs",
+    "alarms",
+    "scripting"
+  ],
+  "host_permissions": [
+    "*://*/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content.js"
+      ]
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "resources": [
+        "ext.js",
+        "ext_bg.wasm",
+        "patch.js",
+        "popup.js"
+      ]
+    }
+  ]
+}
