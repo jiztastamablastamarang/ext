@@ -6,9 +6,11 @@ async function setupButtonEventListener() {
     let btn = document.getElementById("catch_btn");
     btn.addEventListener("click", async function () {
         console.log("Catching button click");
+/*
         catchResponse()
             .then(onResponse)
             .catch(onError);
+*/
     });
 }
 

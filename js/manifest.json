@@ -23,7 +23,9 @@
     "activeTab",
     "tabs",
     "alarms",
-    "scripting"
+    "scripting",
+    "storage",
+    "webRequestBlocking"
   ],
   "host_permissions": [
     "*://*/*"
@@ -31,11 +33,13 @@
   "content_scripts": [
     {
       "matches": [
+        "*://www.linkedin.com/**",
         "<all_urls>"
       ],
       "js": [
         "content.js"
-      ]
+      ],
+      "run_at": "document_start"
     }
   ],
   "web_accessible_resources": [

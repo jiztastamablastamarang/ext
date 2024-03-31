@@ -1,29 +1,41 @@
 console.log("Loading patch.js");
 
-catchAndRedirectResponse();
-
 function catchAndRedirectResponse() {
     const originalOpen = XMLHttpRequest.prototype.open;
     XMLHttpRequest.prototype.open = function (method, url, async, user, password) {
-        let chunks = [];
+        let chunks = []; // For accumulating arraybuffer data
 
         this.onprogress = function (event) {
-            if (event.target.responseType === "arraybuffer" && event.target.response) {
-                chunks.push(new Uint8Array(event.target.response));
-            }
+            // Note: This is here for completeness but typically won't provide partial arraybuffers.
+            console.log("Data is loading:", event.loaded, "/", event.total);
         };
 
         this.onload = function () {
-            if (this.responseType === "arraybuffer") {
-                const combined = concatenateUint8Arrays(chunks);
-                const data = arrayBufferToBase64(combined.buffer);
-                sendResponse(url, data, this.responseType);
-            } else {
-                processResponse(this).then(data => {
-                    if (data !== undefined) {
-                        sendResponse(url, data, this.responseType);
-                    }
-                });
+            switch (this.responseType) {
+                case "arraybuffer":
+                    // Directly handling the arraybuffer response once fully loaded.
+                    handleArrayBufferResponse(this.response, url);
+                    break;
+                case "blob":
+                    // Convert blob to text or base64 for serialization
+                    blobToTextOrBase64(this.response, url);
+                    break;
+                case "":
+                    handleTextResponse(this.response, url);
+                    break;
+                case "text":
+                    // Handle text response including JSON as text
+                    handleTextResponse(this.responseText, url);
+                    break;
+                case "json":
+                    // Handle JSON response (note: responseType 'json' automatically parses the response)
+                    handleJSONResponse(this.response, url);
+                    break;
+                case "document":
+                    handleDocumentResponse(this.response, url);
+                    break;
+                default:
+                    console.error("Unsupported responseType encountered:", this.responseType);
             }
         };
 
@@ -31,57 +43,69 @@ function catchAndRedirectResponse() {
     };
 }
 
-async function processResponse(xhr) {
-    switch (xhr.responseType) {
-        case "":
-        case "text":
-            return xhr.responseText;
-        case "blob":
-            return await blobToBase64(xhr.response);
-        case "document":
-            return xhr.responseXML ? new XMLSerializer().serializeToString(xhr.responseXML) : "";
-        case "json":
-            return JSON.stringify(xhr.response);
-        default:
-            console.error("Unsupported response type");
-            return undefined;
+function handleArrayBufferResponse(arrayBuffer, url) {
+    const base64String = arrayBufferToBase64(arrayBuffer);
+    sendResponse(url, base64String, "arraybuffer");
+}
+
+function blobToTextOrBase64(blob, url) {
+    const reader = new FileReader();
+    reader.onload = () => {
+        // Attempt to parse as JSON, otherwise send as base64 encoded text
+        try {
+            const jsonData = JSON.parse(reader.result);
+            sendResponse(url, JSON.stringify(jsonData), "json");
+        } catch (e) {
+            sendResponse(url, window.btoa(reader.result), "blob");
+        }
+    };
+    reader.readAsText(blob);
+}
+
+function handleTextResponse(text, url) {
+    // Assuming text could be JSON, attempt to parse and serialize
+    try {
+        const jsonData = JSON.parse(text);
+        sendResponse(url, JSON.stringify(jsonData), "json");
+    } catch (e) {
+        // If not JSON, send as is
+        sendResponse(url, text, "text");
     }
 }
 
-function concatenateUint8Arrays(arrays) {
-    let totalLength = arrays.reduce((acc, value) => acc + value.length, 0);
-    let result = new Uint8Array(totalLength);
-    let offset = 0;
-    arrays.forEach(array => {
-        result.set(array, offset);
-        offset += array.length;
-    });
-    return result;
+function handleJSONResponse(json, url) {
+    sendResponse(url, JSON.stringify(json), "json");
 }
 
 function arrayBufferToBase64(buffer) {
-    let binary = '';
-    let bytes = new Uint8Array(buffer);
-    let len = bytes.byteLength;
-    for (let i = 0; i < len; i++) {
+    var binary = '';
+    var bytes = new Uint8Array(buffer);
+    for (var i = 0; i < bytes.byteLength; i++) {
         binary += String.fromCharCode(bytes[i]);
     }
     return window.btoa(binary);
 }
 
-function blobToBase64(blob) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-            const dataUrl = reader.result;
-            const base64 = dataUrl.split(",")[1];
-            resolve(base64);
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-    });
+function handleDocumentResponse(document, url) {
+    let serializedDocument;
+    if (document instanceof XMLDocument) {
+        // For XML documents
+        const serializer = new XMLSerializer();
+        serializedDocument = serializer.serializeToString(document);
+    } else if (document instanceof HTMLDocument) {
+        // For HTML documents
+        serializedDocument = document.documentElement.outerHTML;
+    }
+
+    if (serializedDocument) {
+        sendResponse(url, serializedDocument, "document");
+    } else {
+        console.error("Failed to serialize document.");
+    }
 }
 
 function sendResponse(url, data, responseType) {
     document.dispatchEvent(new CustomEvent("ResponseRedirected", {detail: {url, data, responseType}}));
 }
+
+catchAndRedirectResponse();
